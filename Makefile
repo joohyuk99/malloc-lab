@@ -12,7 +12,8 @@ LDFLAGS= -Wall -O2 -m32
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 
 test: mdriver
-	./mdriver -V -f short1-bal.rep
+#	./mdriver -V -f short1-bal.rep
+	./mdriver -t traces
 
 mdriver: $(OBJS)
 	$(CC) $(CFLAGS) -o mdriver $(OBJS)
