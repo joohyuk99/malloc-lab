@@ -289,6 +289,7 @@ int main(int argc, char **argv)
 
     /* Evaluate student's mm malloc package using the K-best scheme */
     for (i=0; i < num_tracefiles; i++) {
+printf("tracefile: %s\n", tracefiles[i]);
 	trace = read_trace(tracedir, tracefiles[i]);
 	mm_stats[i].ops = trace->num_ops;
 	if (verbose > 1)

@@ -7,13 +7,14 @@ HANDINDIR = /afs/cs.cmu.edu/academic/class/15213-f01/malloclab/handin
 
 CC = gcc
 CFLAGS = -g -Wall -O2 -m32
-LDFLAGS= -Wall -O2 -m32
+LDFLAGS= -Wall -O2
 
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 
 test: mdriver
-#	./mdriver -V -f short1-bal.rep
-	./mdriver -t traces
+#	./mdriver -V -f traces/realloc2.rep
+#	./mdriver -f short1-bal.rep
+	./mdriver -V -t traces
 
 mdriver: $(OBJS)
 	$(CC) $(CFLAGS) -o mdriver $(OBJS)

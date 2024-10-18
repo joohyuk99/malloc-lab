@@ -45,20 +45,18 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 extern char* mem_brk;
-#define CHUNK_SIZE (1 << 10)
-#define WORD 4
+#define CHUNK_SIZE (1 << 11)
+#define WORD 8
 
 #define MAKE_HEADER(size, alloc) ((size) | (alloc))
-#define GET_WORD(ptr) (*(unsigned int*)(ptr))
-#define PUT_WORD(ptr, val) (*(unsigned int*)(ptr) = (val))
-#define GET_SIZE(ptr) (GET_WORD(ptr) & ~0x7)
+#define GET_WORD(ptr) (*(header*)(ptr))
+#define PUT_WORD(ptr, val) (*(header*)(ptr) = (val))
+#define GET_SIZE(ptr) (GET_WORD(ptr) & (header)~0x7)
 #define IS_EMPTY(ptr) (!(GET_WORD(ptr) & 0b1))
 #define NEXT_BLOCK(ptr) ((ptr) + (GET_SIZE(ptr)))
 
 typedef char* pointer;
-typedef unsigned int header;
-
-const header epilog = MAKE_HEADER(0, 1);
+typedef unsigned long long int header;
 
 static char* heap_first;
 static char* heap_last;
@@ -69,24 +67,31 @@ static void* coalesce(void* ptr);
 void malloc_test();
 void malloc_test() {
 
+    int visible = 1;
+
+    if(!visible)
+        return;
+
     printf("\n********************************************************\n\n");
 
     printf("heap first: %p\n", heap_first);
-    printf("heap last: %p\n", heap_last);
+    printf("heap last: %p\n\n", heap_last);
 
     char* ptr = heap_first;
     int block_cnt = 0;
     unsigned long long int f = 0;
     while(0 < GET_SIZE(ptr + f) && ptr + f < heap_last) {
         printf("block %d\nis allocate: %d\nsize: %d\n", block_cnt++, !IS_EMPTY(ptr + f), GET_SIZE(ptr + f));
-        printf("HEADER: %p, %0.4o\n", ptr + f, GET_WORD(ptr + f));
+        printf("HEADER: %p, %0.8o\n", ptr + f, GET_WORD(ptr + f));
         //printf("size: %d\n", GET_SIZE(ptr + f));
         f = f + GET_SIZE(ptr + f) - WORD;
-        printf("FOOTER: %p, %0.4o\n", ptr + f, GET_WORD(ptr + f));
+        printf("FOOTER: %p, %0.8o\n", ptr + f, GET_WORD(ptr + f));
 
         printf("\n");
         f += WORD;
     }
+    if(ptr + f < heap_last)
+        printf("HEADER: %p, %0.8o\n", ptr + f, GET_WORD(ptr + f));
 
     printf("\n********************************************************\n");
     return;
@@ -98,11 +103,11 @@ void malloc_test() {
 int mm_init(void)
 {
     // init heap
-    if((heap_first = mem_sbrk(3 * WORD)) == (void*)-1)
+    if((heap_first = mem_sbrk(2 * WORD)) == (void*)-1)
         return -1;
 
-    PUT_WORD(heap_first, 0);
-    heap_first += WORD;
+    // PUT_WORD(heap_first, 0);
+    // heap_first += WORD;
     
     header prolog_header = MAKE_HEADER(2 * WORD, 1);
     PUT_WORD(heap_first, prolog_header);  // prologue header
@@ -111,7 +116,7 @@ int mm_init(void)
 
     if(expend_heap(CHUNK_SIZE) == NULL)
         return -1;
-    
+// malloc_test();
     return 0;
 }
 
@@ -119,19 +124,6 @@ int mm_init(void)
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
-// void *mm_malloc(size_t size)
-// {
-// printf("malloc %d\n\n", size);
-//     int newsize = ALIGN(size + SIZE_T_SIZE);
-//     void *p = mem_sbrk(newsize);
-//     if (p == (void *)-1)
-// 	return NULL;
-//     else {
-//         *(size_t *)p = size;
-//         return (void *)((char *)p + SIZE_T_SIZE);
-//     }
-// malloc_test();
-// }
 void *mm_malloc(size_t size)
 {
 // printf("\n\nmalloc %d\n\n", size);
@@ -180,7 +172,7 @@ void *mm_malloc(size_t size)
         PUT_WORD(empty_ptr, empty_header);
         PUT_WORD(empty_ptr + empty_size - WORD, empty_header);
     }
-//printf("\nmalloc end\n\n");
+// printf("\nmalloc end\n\n");
 // malloc_test();
     return alloc_ptr + WORD;
 }
@@ -190,6 +182,9 @@ void *mm_malloc(size_t size)
 //  */
 void mm_free(void *ptr)
 {
+// printf("\n\nfree %p\n\n", ptr - WORD);
+// malloc_test();
+
     ptr -= WORD;
     if(IS_EMPTY(ptr))
         return;
@@ -197,9 +192,8 @@ void mm_free(void *ptr)
     size_t free_size = GET_SIZE(ptr);
     header free_header = MAKE_HEADER(free_size, 0);
     PUT_WORD(ptr, free_header);
-    
+// malloc_test();
     coalesce(ptr);
-
     return;
 }
 
@@ -222,7 +216,7 @@ static void* expend_heap(size_t size) {
     header chunk_header = MAKE_HEADER(CHUNK_SIZE * chunk_num, 0);
     PUT_WORD(chunk_ptr, chunk_header);
     PUT_WORD(chunk_ptr + GET_SIZE(chunk_ptr) - WORD, chunk_header);
-    
+// malloc_test();
     return coalesce(chunk_ptr);
 }
 
@@ -249,7 +243,7 @@ static void* coalesce(void* ptr) {
     header new_header = MAKE_HEADER(size, 0);
     PUT_WORD(ret_pointer, new_header);
     PUT_WORD(ret_pointer + size - WORD, new_header);
-
+// malloc_test();
     return ret_pointer;
 }
 
@@ -258,31 +252,50 @@ static void* coalesce(void* ptr) {
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+// printf("\n\nrealloc %p, %d\n\n", ptr - WORD, size);
+    if(ptr == NULL)
+        return mm_malloc(size);
+
+    if(size == 0){
+        mm_free(ptr);
+        return NULL;
+    }
+
+    size = size % ALIGNMENT ? ((size / ALIGNMENT) + 1) * ALIGNMENT : size;
+    size += 2 * WORD;
+
+    size_t old_size = GET_SIZE(ptr - WORD);
+
+    if(old_size == size)
+        return ptr;
     
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-      return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    pointer ret_ptr = mm_malloc(size);
+
+    size_t copy_size = old_size < size ? old_size : size;
+    memcpy(ret_ptr, ptr, copy_size);
+    // for(size_t i = 0; i < old_size && i < size; i += WORD)
+    //     PUT_WORD(ret_ptr + i, GET_WORD(ptr + i));
+    
+    mm_free(ptr);
+// malloc_test();
+    return ret_ptr;
 }
 
+// void *mm_realloc(void *ptr, size_t size)
+// {
+// printf("realloc %d\n\n", size);
+//     void *oldptr = ptr;
+//     void *newptr;
+//     size_t copySize;
 
+//     newptr = mm_malloc(size);
+//     if (newptr == NULL)
+//         return NULL;
+//     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+//     if (size < copySize)
+//         copySize = size;
+//     memcpy(newptr, oldptr, copySize);
+//     mm_free(oldptr);
 
-
-
-
-
-
-
-
-
-
-
-
+//     return newptr;
+// }
