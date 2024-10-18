@@ -269,33 +269,40 @@ void *mm_realloc(void *ptr, size_t size)
     if(old_size == size)
         return ptr;
     
+    else if(size < old_size) {
+        header new_header = MAKE_HEADER(size, 1);
+        PUT_WORD(ptr - WORD, new_header);
+        PUT_WORD(ptr + size - WORD * 2, new_header);
+        header empty_header = MAKE_HEADER(old_size - size, 0);
+        PUT_WORD(ptr + size - WORD, empty_header);
+        coalesce(ptr + size - WORD);
+        return ptr;
+    }
+
+    else if(old_size < size) {
+        pointer next_block = ptr + old_size - WORD;
+        size_t next_size = GET_SIZE(next_block);
+        if(IS_EMPTY(next_block) && size <= old_size + next_size) {
+            header new_header = MAKE_HEADER(size, 1);
+            PUT_WORD(ptr - WORD, new_header);
+            PUT_WORD(ptr + size - WORD * 2, new_header);
+            if(size < old_size + next_size) {
+                size_t empty_size = old_size + next_size - size;
+                header empty_header = MAKE_HEADER(old_size + next_size - size, 0);
+                PUT_WORD(ptr + size - WORD, empty_header);
+                PUT_WORD(ptr + size + empty_size - WORD * 2, empty_header);
+            }
+
+            return ptr;
+        }
+    }
+    
     pointer ret_ptr = mm_malloc(size);
 
     size_t copy_size = old_size < size ? old_size : size;
     memcpy(ret_ptr, ptr, copy_size);
-    // for(size_t i = 0; i < old_size && i < size; i += WORD)
-    //     PUT_WORD(ret_ptr + i, GET_WORD(ptr + i));
     
     mm_free(ptr);
 // malloc_test();
     return ret_ptr;
 }
-
-// void *mm_realloc(void *ptr, size_t size)
-// {
-// printf("realloc %d\n\n", size);
-//     void *oldptr = ptr;
-//     void *newptr;
-//     size_t copySize;
-
-//     newptr = mm_malloc(size);
-//     if (newptr == NULL)
-//         return NULL;
-//     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-//     if (size < copySize)
-//         copySize = size;
-//     memcpy(newptr, oldptr, copySize);
-//     mm_free(oldptr);
-
-//     return newptr;
-// }
